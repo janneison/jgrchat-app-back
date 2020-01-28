@@ -1,9 +1,7 @@
-FROM alpine:3.7
-
+FROM ubuntu:18.04
 RUN apt-get update && apt-get -qq -y install curl
 
-
-ENV NODE_VERSION=12.14.1
+ENV NODE_VERSION=9.9.0
 RUN apt-get install -y curl
 RUN curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.34.0/install.sh | bash
 ENV NVM_DIR=/root/.nvm
@@ -16,6 +14,6 @@ RUN npm --version
 ADD . /usr/app/
 
 WORKDIR /usr/app
+#RUN npm install -g n
 
 RUN npm install
-

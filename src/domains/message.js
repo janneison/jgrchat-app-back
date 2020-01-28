@@ -1,6 +1,7 @@
 import _ from 'lodash'
 import {OrderedMap} from 'immutable'
 import {ObjectID} from 'mongodb'
+import {PARAMETERS} from '../infrastructure/support/enumeration'
 
 export default class Message {
 
@@ -9,7 +10,7 @@ export default class Message {
         this.messages = new OrderedMap();
     }
 
-    getChannelMessages(channelId, limit = 50, offset = 0){
+    getChannelMessages(channelId, limit = PARAMETERS.LIMIT, offset = 0){
 
         return new Promise((resolve, reject) => {
 
@@ -31,6 +32,7 @@ export default class Message {
                     },
                 },
                 {
+
                     $project: {
                         _id: true,
                         channelId: true,
@@ -59,33 +61,29 @@ export default class Message {
                 {
                     $sort: {created: -1}
                 }
-
             ];
 
 
             this.app.db.collection('messages').aggregate(query, (err, results) => {
-                return err ? reject(err): resolve(results)
-
+                return err ? reject(err): resolve(results);
             });
 
-
-        })
+        });
     }
-    create(obj) {
 
+    create(valueObject) {
 
         return new Promise((resolve, reject) => {
 
-
-            let id = _.get(obj, '_id', null);
+            let id = _.get(valueObject, '_id', null);
             id = _.toString(id);
 
-            const userId = new ObjectID(_.get(obj, 'userId'));
-            const channelId = new ObjectID(_.get(obj, 'channelId'));
+            const userId = new ObjectID(_.get(valueObject, 'userId'));
+            const channelId = new ObjectID(_.get(valueObject, 'channelId'));
 
             const message = {
                 _id: new ObjectID(id),
-                body: _.get(obj, 'body', ''),
+                body: _.get(valueObject, 'body', ''),
                 userId: userId,
                 channelId: channelId,
                 created: new Date(),
@@ -106,7 +104,6 @@ export default class Message {
                 })
 
                 this.app.models.user.load(_.toString(userId)).then((user) => {
-
                     _.unset(user, 'password');
                     _.unset(user, 'email');
                     message.user = user;
@@ -114,7 +111,6 @@ export default class Message {
                     return resolve(message);
 
                 }).catch((err) => {
-
                     return reject(err);
                 });
             });

@@ -5,10 +5,12 @@ import _ from 'lodash'
 export default class Connection {
 
     constructor(app) {
+
         this.app = app;
         this.connections = OrderedMap();
         this.modelDidLoad();
     }
+
 
     decodeMesasge(msg) {
 
@@ -22,19 +24,22 @@ export default class Connection {
         }
 
         return messageObject;
+
     }
 
-    sendToMembers(userId, obj) {
+    sendToMembers(userId, valueObject) {
 
         const query = [
             {
                 $match: {
+
                     members: {$all: [new ObjectID(userId)]}
                 }
             },
             {
 
                 $lookup: {
+
                     from: 'users',
                     localField: 'members',
                     foreignField: '_id',
@@ -54,15 +59,15 @@ export default class Connection {
                     _id: "$users._id"
                 }
             }
-
         ];
+
 
         const users = [];
 
-        this.app.db.collection('channels').aggregate(query, (err, results) => {
-           
-            if (err === null && results) {
 
+        this.app.db.collection('channels').aggregate(query, (err, results) => {
+
+            if (err === null && results) {
                 _.each(results, (result) => {
                     const uid = _.toString(_.get(result, '_id'));
                     if (uid) {
@@ -75,27 +80,30 @@ export default class Connection {
 
                     memberConnections.forEach((connection, key) => {
                         const ws = connection.ws;
-                        this.send(ws, obj);
+                        this.send(ws, valueObject);
                     });
                 }
             }
-        })
-    }
-
-    sendAll(obj) {
-
-        this.connections.forEach((con, key) => {
-            const ws = con.ws;
-            this.send(ws, obj);
         });
     }
 
-    send(ws, obj) {
-        const message = JSON.stringify(obj);
+    sendAll(valueObject) {
+
+        this.connections.forEach((con, key) => {
+            const ws = con.ws;
+
+            this.send(ws, valueObject);
+        });
+    }
+
+    send(ws, valueObject) {
+
+        const message = JSON.stringify(valueObject);
         ws.send(message);
     }
 
     doTheJob(socketId, msg) {
+
 
         const action = _.get(msg, 'action');
         const payload = _.get(msg, 'payload');
@@ -103,30 +111,36 @@ export default class Connection {
 
         switch (action) {
             case 'create_message':
-
                 if (userConnection.isAuthenticated) {
                     let messageObject = payload;
-
                     messageObject.userId = _.get(userConnection, 'userId');
+
                     this.app.models.message.create(messageObject).then((message) => {
 
                         const channelId = _.toString(_.get(message, 'channelId'));
                         this.app.models.channel.load(channelId).then((channel) => {
+
                             const memberIds = _.get(channel, 'members', []);
+
                             _.each(memberIds, (memberId) => {
+
                                 memberId = _.toString(memberId);
                                 const memberConnections = this.connections.filter((c) => _.toString(c.userId) === memberId);
+
                                 memberConnections.forEach((connection) => {
+
                                     const ws = connection.ws;
+
                                     this.send(ws, {
                                         action: 'message_added',
                                         payload: message,
-                                    })
+                                    });
 
                                 });
 
                             });
                         });
+
 
                     }).catch(err => {
                         const ws = userConnection.ws;
@@ -140,6 +154,7 @@ export default class Connection {
             case 'create_channel':
 
                 let channel = payload;
+
                 const userId = userConnection.userId;
                 channel.userId = userId;
 
@@ -171,20 +186,23 @@ export default class Connection {
                                 memberConnection.forEach((con) => {
 
                                     const ws = con.ws;
-                                    const obj = {
+                                    const valueObject = {
                                         action: 'channel_added',
                                         payload: chanelObject,
                                     }
-                                    this.send(ws, obj);
+
+                                    this.send(ws, valueObject);
 
                                 });
 
                             }
 
                         });
+
                     });
 
                 });
+
                 break;
 
             case 'auth':
@@ -193,6 +211,7 @@ export default class Connection {
                 let connection = this.connections.get(socketId);
 
                 if (connection) {
+
                     this.app.models.token.loadTokenAndUser(userTokenId).then((token) => {
 
                         const userId = token.userId;
@@ -201,11 +220,13 @@ export default class Connection {
                         connection.userId = `${userId}`;
 
                         this.connections = this.connections.set(socketId, connection);
-                        const obj = {
+
+                        const valueObject = {
                             action: 'auth_success',
                             payload: 'You are verified',
                         }
-                        this.send(connection.ws, obj);
+                        this.send(connection.ws, valueObject);
+
                         const userIdString = _.toString(userId);
                         this.sendToMembers(userIdString, {
                             action: 'user_online',
@@ -213,14 +234,19 @@ export default class Connection {
                         });
 
                         this.app.models.user.updateUserStatus(userIdString, true);
-                    }).catch((err) => {.
-                        const obj = {
+
+
+                    }).catch((err) => {
+                        const valueObject = {
                             action: 'auth_error',
-                            payload: "An error authentication your account: " + userTokenId
+                            payload: "Authentication failed in your account: " + userTokenId
                         };
-                        this.send(connection.ws, obj);
+
+                        this.send(connection.ws, valueObject);
                     });
+
                 }
+
                 break;
 
             default:
@@ -241,17 +267,20 @@ export default class Connection {
                 userId: null,
                 isAuthenticated: false,
             }
+
             this.connections = this.connections.set(socketId, clientConnection);
 
             ws.on('message', (msg) => {
+
                 const message = this.decodeMesasge(msg);
                 this.doTheJob(socketId, message);
             });
 
-
             ws.on('close', () => {
+
                 const closeConnection = this.connections.get(socketId);
                 const userId = _.toString(_.get(closeConnection, 'userId', null));
+
                 this.connections = this.connections.remove(socketId);
 
                 if (userId) {
